@@ -1,3 +1,25 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBp3rJEijmUl3UjMwDcjhG3swDS6KP0AR0",
+  authDomain: "lumora-ui.firebaseapp.com",
+  projectId: "lumora-ui",
+  storageBucket: "lumora-ui.firebasestorage.app",
+  messagingSenderId: "1035959513471",
+  appId: "1:1035959513471:web:92c9c57e368c710788ea4a",
+  measurementId: "G-6X4DE8KSJS"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 const element = document.getElementById('element');
 const distanceInput = document.getElementById('distance');
 const blurInput = document.getElementById('blur');
@@ -17,12 +39,13 @@ const saveHistoryBtn = document.getElementById('save-history-btn');
 const historyList = document.getElementById('history-list');
 
 let currentRadius = 40;
-let historyStyles = JSON.parse(localStorage.getItem('lumoraHistory')) || [];
 
 function updateRadius(val) {
     currentRadius = val;
     update();
 }
+
+window.updateRadius = updateRadius;
 
 function update() {
     const selectedColor = colorPicker.value;
@@ -31,6 +54,7 @@ function update() {
     const intensity = intensityInput.value;
 
     document.documentElement.style.setProperty('--bg-color', selectedColor);
+
     colorValue.innerText = selectedColor;
 
     labelDistance.innerText = `${dist}px`;
@@ -52,7 +76,8 @@ background: ${selectedColor};
 box-shadow: ${shadowStr};`;
 }
 
-function applyPreset(type) {
+window.applyPreset = function(type) {
+
     if (type === 'minimal') {
         colorPicker.value = '#e8e8e8';
         distanceInput.value = 12;
@@ -81,6 +106,7 @@ function applyPreset(type) {
 }
 
 function toggleTheme() {
+
     document.body.classList.toggle('dark');
 
     if (document.body.classList.contains('dark')) {
@@ -95,73 +121,63 @@ function toggleTheme() {
 }
 
 function downloadCSS() {
+
     const fileContent = `.lumora-element {
 ${cssOutput.textContent}
 }`;
 
     const blob = new Blob([fileContent], { type: 'text/css' });
+
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');
+
     link.href = url;
     link.download = 'lumora-style.css';
+
     link.click();
 
     URL.revokeObjectURL(url);
 }
 
-function saveToHistory() {
+async function saveToHistory() {
+
     const style = {
         color: colorPicker.value,
         distance: distanceInput.value,
         blur: blurInput.value,
         intensity: intensityInput.value,
-        radius: currentRadius
+        radius: currentRadius,
+        createdAt: new Date()
     };
 
-    historyStyles.unshift(style);
+    await addDoc(collection(db, "styles"), style);
 
-    if (historyStyles.length > 5) {
-        historyStyles.pop();
-    }
-
-    localStorage.setItem('lumoraHistory', JSON.stringify(historyStyles));
-    renderHistory();
+    loadHistory();
 }
 
-function renderHistory() {
+async function loadHistory() {
+
     historyList.innerHTML = '';
 
-    if (historyStyles.length === 0) {
-        historyList.innerHTML = '<p style="font-size: 0.85rem; opacity: 0.7;">Nenhum estilo salvo ainda.</p>';
-        return;
-    }
+    const querySnapshot = await getDocs(collection(db, "styles"));
 
-    historyStyles.forEach((style, index) => {
+    querySnapshot.forEach((doc) => {
+
+        const style = doc.data();
+
         const item = document.createElement('div');
+
         item.classList.add('history-item');
 
         item.innerHTML = `
             <span>
-                ${style.color} | ${style.distance}px | ${style.blur}px | R:${style.radius}px
+                ${style.color} | ${style.distance}px | ${style.blur}px
             </span>
-            <button onclick="loadHistory(${index})">Usar</button>
         `;
 
         historyList.appendChild(item);
     });
-}
-
-function loadHistory(index) {
-    const style = historyStyles[index];
-
-    colorPicker.value = style.color;
-    distanceInput.value = style.distance;
-    blurInput.value = style.blur;
-    intensityInput.value = style.intensity;
-    currentRadius = style.radius;
-
-    update();
 }
 
 [distanceInput, blurInput, intensityInput, colorPicker].forEach(input => {
@@ -169,9 +185,11 @@ function loadHistory(index) {
 });
 
 copyBtn.addEventListener('click', () => {
+
     navigator.clipboard.writeText(cssOutput.textContent);
 
     const originalText = copyBtn.innerText;
+
     copyBtn.innerText = 'Copiado!';
 
     setTimeout(() => {
@@ -180,8 +198,11 @@ copyBtn.addEventListener('click', () => {
 });
 
 downloadBtn.addEventListener('click', downloadCSS);
+
 saveHistoryBtn.addEventListener('click', saveToHistory);
+
 themeBtn.addEventListener('click', toggleTheme);
 
 update();
-renderHistory();
+
+loadHistory();
